@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/.idea/AutoModeler.iml" filepath="$PROJECT_DIR$/.idea/AutoModeler.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../Demo_DSR1-Distill-1.5B/.idea/Demo_DSR1-Distill-1.5B.iml" filepath="$PROJECT_DIR$/../Demo_DSR1-Distill-1.5B/.idea/Demo_DSR1-Distill-1.5B.iml" />
+      <module fileurl="file://$USER_HOME$/Documents/PE-GPT-main/.idea/PE-GPT-main.iml" filepath="$USER_HOME$/Documents/PE-GPT-main/.idea/PE-GPT-main.iml" />
+    </modules>
+  </component>
+</project>
