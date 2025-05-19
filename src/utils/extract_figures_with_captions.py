@@ -312,8 +312,8 @@ def blocks_overlap_vertically(block1, block2):
 
     Returns True if there is any vertical overlap, False otherwise.
     """
-    y0_1, y1_1 = block1['bbox'][1], block1['bbox'][3]
-    y0_2, y1_2 = block2['bbox'][1], block2['bbox'][3]
+    y0_1, y1_1 = block1[1], block1[3]
+    y0_2, y1_2 = block2[1], block2[3]
 
     # Two vertical ranges [y0_1, y1_1] and [y0_2, y1_2] overlap if:
     return not (y1_1 < y0_2 or y1_2 < y0_1)
@@ -337,6 +337,14 @@ def merge_block_rects(blocks):
     y1_max = max(block['bbox'][3] for block in blocks)
 
     return [x0_min, y0_min, x1_max, y1_max]
+
+def merge_bbox(bboxes):
+    # Combine multiple bbox rectangles into one
+    x0 = min(b[0] for b in bboxes)
+    y0 = min(b[1] for b in bboxes)
+    x1 = max(b[2] for b in bboxes)
+    y1 = max(b[3] for b in bboxes)
+    return fitz.Rect(x0, y0, x1, y1)
 
 def re_construct_block(page):
     """
@@ -421,15 +429,10 @@ def re_construct_block(page):
 def extract_figures_text_with_captions(pdf_path, output_folder="extracted_figures"):
     os.makedirs(output_folder, exist_ok=True)
     doc = fitz.open(pdf_path)
+    new_doc = detach_lablize(doc, output_folder)
 
-    for page_num in range(35,37):  # Max 21 pages
-        print('\n',"===================== new page =====================")
-        page = doc[page_num]
-        blocks = re_construct_block(page)
-        for i, block in enumerate(blocks):
-            block_summary = f"[Block {i}] Type: {block.get('type')} "
-            print(block_summary)
-            print(" - - - block text", block['text'])
+    doc.close()
+    new_doc.close()
     return ""
 
 def extract_figures_text_with_captions_old(pdf_path, output_folder="extracted_figures"):
@@ -459,7 +462,7 @@ def extract_figures_text_with_captions_old(pdf_path, output_folder="extracted_fi
             block_summary = f"[Block {i}] Type: {block_type} | BBox: {bbox} | Lines: {num_lines}"
 
             # Preview first few words if it's text
-            if block_type == 0 and num_lines > 0:
+            """if block_type == 0 and num_lines > 0:
                 preview_text = ""
                 for line in block["lines"]:
                     for span in line.get("spans", []):
@@ -467,11 +470,15 @@ def extract_figures_text_with_captions_old(pdf_path, output_folder="extracted_fi
                 preview_text = preview_text.strip().replace('\n', ' ')
                 if len(preview_text) > 60:
                     preview_text = preview_text[:60] + "..."
-                block_summary += f" | Text Preview: \"{preview_text}\""
+                block_summary += f" | Text Preview: \"{preview_text}\"
+                """
 
             print(block_summary)
 
             for line in block.get("lines", []):
+                print(" - - - -Line BBox: ", line["bbox"], " - - wmode: ", line['wmode'], " - - Dir: ", line['dir'])
+
+
                 line_text = ""
                 for span in line.get("spans", []):
                     span_text = span.get("text", "")
@@ -491,14 +498,14 @@ def extract_figures_text_with_captions_old(pdf_path, output_folder="extracted_fi
                         #print("BOLD Match found!!!   span_text:", repr(span_text), " ~~~  flag_bold: ", is_bold)
                         found_figure = True
                     line_text += span_text + ""
-
-
                     span_rect = fitz.Rect(span["bbox"])
                     if block_rect.is_empty:
                         block_rect = span_rect
                     else:
                         block_rect |= span_rect  # Union with existing block rect
+
                 print(" - - - - - - - line_text: ", line_text)
+
                 block_text += line_text + " "
             print(" [-] block_text: ", block_text)
             print('\n')
@@ -541,6 +548,93 @@ def extract_figures_text_with_captions_old(pdf_path, output_folder="extracted_fi
                 prev_caption = figure_rect  # update for next iteration
 
     return page_data
+
+def detach_lablize(doc, output_folder):
+    new_doc = fitz.open()
+
+    for page_num in range(35, 37):  # Max 21 pages
+        page = doc[page_num]
+        found_figure = False
+        found_equation = False
+        # Create a blank page in new_doc with same size
+        new_page = new_doc.new_page(width=page.rect.width, height=page.rect.height)
+
+        blocks = page.get_text("dict")["blocks"]
+        equation_rects = []
+        eq_index = ""
+        for i, block in enumerate(blocks):
+            block_text = ""
+            #print block information for debugging
+            block_type = block.get("type", "?")
+            bbox = block.get("bbox", "?")
+            num_lines = len(block.get("lines", []))
+            block_summary = f"[Block {i}] Type: {block_type} | BBox: {bbox} | Lines: {num_lines}"
+            print(block_summary)
+
+            for j, line in enumerate(block.get("lines", [])):
+                print(" - - - -Line BBox: ", line["bbox"], " - - wmode: ", line['wmode'], " - - Dir: ", line['dir'])
+                line_text = ""
+                for q, span in enumerate(line.get("spans", [])):
+                    span_text = span.get("text", "")
+                    print(" - - - - - - -  -   -  - span text: ", span_text, "~~~~~~~~~")
+                    # Detect FIGURE
+                    if re.search(r'Fig\.\W*', span_text) and "bold" in span.get("font", "").lower():
+                        found_figure = True
+                    #DETECH EQUATION
+                    if re.fullmatch(r'\(\d+\.\d+\)', span_text.strip()):
+                        found_equation = True
+                        eq_index = span_text.strip
+
+                    if found_equation:
+                        """merge spans for a same equation, the spans in the same equation is overlapped vertically. 
+                        get the bbox of the merged spans using a subfunction called merge_bbox, to save the equation
+                        save the equation area as an image"""
+                        # Collect overlapping spans for the equation
+                        equation_rects.append(span['bbox'])
+                        qq = q
+                        while qq >= 1 and blocks_overlap_vertically(span['bbox'], line["spans"][qq-1]['bbox']):
+                            equation_rects.append(line["spans"][qq - 1]["bbox"])
+                            qq-=1
+                    if found_figure:
+                        # Collect overlapping spans for the image
+                        print("Found figure")
+
+                    line_text += span_text + ""
+                print(" - - - - - - - line_text: ", line_text)
+                if found_equation:
+                    jj = j
+                    #equation_rects.append(line["bbox"])
+                    while jj>=1 and blocks_overlap_vertically(line['bbox'], block["lines"][jj - 1]['bbox']):
+                        equation_rects.append(block["lines"][jj - 1]['bbox'])
+                        jj -= 1
+                block_text += line_text + " "
+            print(" [-] block_text: ", block_text)
+            print('\n')
+        if found_equation:
+            ii = i
+            if blocks_overlap_vertically(block['bbox'], blocks[ii-1]['bbox']):
+                while ii >= 1 and blocks_overlap_vertically(block['bbox'], blocks[ii-1]['bbox']):
+                    equation_rects.append(blocks[ii-1]['bbox'])
+                    ii -= 1
+            found_equation = False  # reset for next detection
+            # Merge their bounding boxes
+            merged_rect = merge_bbox(equation_rects)
+            # Save the merged equation area as an image
+            image = page.get_pixmap(clip=merged_rect, dpi=300)
+            image.save(f"equation_page{page_num}_block{i}_line{j}.png")
+            print(" Saved equation=====, image save to ", f"equation_page{page_num}_block{i}_line{j}.png")
+            # Optional: draw a red rectangle on new page to indicate equation
+            new_page.draw_rect(merged_rect, color=(1, 0, 0), width=0.5)
+            # save the merged
+            """new_page.insert_text(
+            span["origin"],
+            span["text"],
+            fontsize=span["size"],
+            fontname=span["font"],
+            color=span.get("color", 0)
+        )"""
+
+    return new_doc
 
 def main():
     for filename in os.listdir(INPUT_DIR):
