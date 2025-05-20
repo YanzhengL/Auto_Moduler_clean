@@ -22,8 +22,8 @@ def search_boundary_above(caption_rect, page, step=10, window=21, previous_capti
     Returns:
         fitz.Rect or None: Likely bounding box of figure above the caption.
     """
-    y_top = caption_rect.y0
-    y_p = previous_caption_rect.y1 if previous_caption_rect is not None else 50.0
+    y_top = caption_rect[1]
+    y_p = previous_caption_rect[3] if previous_caption_rect is not None else 50.0
     #print("Find Central Figure, y_top: ", y_top, " y_p: ", y_p)
     while y_top - step >= y_p:
         #print("Find Central Figure and expand up-ward")
@@ -58,17 +58,17 @@ def search_boundary_above(caption_rect, page, step=10, window=21, previous_capti
                 30,
                 current_top,
                 page.rect.x1 - 50,  # right margin
-                caption_rect.y1 + 5,
+                caption_rect[1] + 5,
             )
         y_top = current_top
 
     if y_top - step < y_p and previous_caption_rect is not None:
         y_top = previous_caption_rect.y0
-    return fitz.Rect(30, y_top, page.rect.x1 - 50,  caption_rect.y1 + 5 )
+    return fitz.Rect(30, y_top, page.rect.x1 - 50,  caption_rect[3] + 5 )
 
 def is_central_caption(caption_rect, page_rect, tolerance=20):
-    caption_center_x = (caption_rect.x0 + caption_rect.x1) / 2
-    page_center_x = (page_rect.x0 + page_rect.x1) / 2
+    caption_center_x = (caption_rect[0] + caption_rect[2]) / 2
+    page_center_x = (page_rect[0] + page_rect[2]) / 2
     return abs(caption_center_x - page_center_x) <= tolerance
 
 def get_caption_side(caption_rect: fitz.Rect, page_rect: fitz.Rect) -> str:
@@ -82,8 +82,8 @@ def get_caption_side(caption_rect: fitz.Rect, page_rect: fitz.Rect) -> str:
     Returns:
         str: "left" if caption is on the left side, "right" if on the right side.
     """
-    caption_center_x = (caption_rect.x0 + caption_rect.x1) / 2
-    page_center_x = (page_rect.x0 + page_rect.x1) / 2
+    caption_center_x = (caption_rect[0] + caption_rect[2]) / 2
+    page_center_x = (page_rect[0] + page_rect[2]) / 2
 
     return "left" if caption_center_x < page_center_x else "right"
 
@@ -106,9 +106,9 @@ def expand_caption_boundary(caption_rect: fitz.Rect, page,  step: float = 10.0, 
     """
     page_rect = page.rect
     side = get_caption_side(caption_rect, page_rect)
-    y_pre = previous_fig_rect.y0 if previous_fig_rect is not None else page_rect.y0 + 50.0
-    y_top = caption_rect.y0
-    y_bottom = caption_rect.y1
+    y_pre = previous_fig_rect[1] if previous_fig_rect is not None else page_rect.y0 + 50.0
+    y_top = caption_rect[1]
+    y_bottom = caption_rect[3]
     #print("Figure not in the central, side is: ", side)
     if side == "left":
         """ Expand to up and down, find the boundary of the Figure"""
@@ -117,7 +117,7 @@ def expand_caption_boundary(caption_rect: fitz.Rect, page,  step: float = 10.0, 
             current_top = y_top - step
             if previous_fig_rect is not None:
                 #print("previous_fig_rect.y0 - ", previous_fig_rect.y0, ", ================= y_top - ", y_top)
-                y_top = previous_fig_rect.y0
+                y_top = previous_fig_rect[1]
                 break
             current_rect = fitz.Rect(
                 30,  # left margin
@@ -167,7 +167,7 @@ def expand_caption_boundary(caption_rect: fitz.Rect, page,  step: float = 10.0, 
         while y_top - step >= y_pre:
             current_top = y_top - step
             current_rect = fitz.Rect(
-                caption_rect.x0,  # left margin
+                caption_rect[0],  # left margin
                 current_top - (window * 2),
                 page.rect.x1 - 50,  # right margin
                 current_top
@@ -191,7 +191,7 @@ def expand_caption_boundary(caption_rect: fitz.Rect, page,  step: float = 10.0, 
         while y_bottom + step <= page_rect.y1 - 60.0:
             current_bottom = y_bottom + step
             current_rect = fitz.Rect(
-                caption_rect.x0,  # left margin
+                caption_rect[0],  # left margin
                 current_bottom,
                 page.rect.x1 - 50,  # right margin
                 current_bottom + (window*2)
@@ -208,7 +208,7 @@ def expand_caption_boundary(caption_rect: fitz.Rect, page,  step: float = 10.0, 
                 break
             y_bottom = current_bottom
 
-        x_left = caption_rect.x1
+        x_left = caption_rect[2]
         while x_left - step >= page_rect.x0+30:
             current_left = x_left - step
             current_rect = fitz.Rect(
@@ -426,139 +426,17 @@ def re_construct_block(page):
         merged_blocks.append(new_block)
     return merged_blocks
 
-def extract_figures_text_with_captions(pdf_path, output_folder="extracted_figures"):
-    os.makedirs(output_folder, exist_ok=True)
+def extract_figures_text_with_captions(pdf_path, output_folder="out"):
+    os.makedirs(f"{output_folder}/equations", exist_ok=True)
+    os.makedirs(f"{output_folder}/figures", exist_ok=True)
     doc = fitz.open(pdf_path)
-    new_doc = detach_lablize(doc, output_folder)
-
-    doc.close()
-    new_doc.close()
-    return ""
-
-def extract_figures_text_with_captions_old(pdf_path, output_folder="extracted_figures"):
-    os.makedirs(output_folder, exist_ok=True)
-    doc = fitz.open(pdf_path)
-    page_data = []
-
-    for page_num in range(35,37):  # Max 21 pages
-        page = doc[page_num]
-        #page_text = page.get_text()
-        #figures = []
-        #print("Page Number: ========  ", page_num, "\n")
-        #print(page_text)
-        blocks = page.get_text("dict")["blocks"]
-        page_rect = page.rect
-        prev_caption = None  # store the previous block
-
-        for i, block in enumerate(blocks):
-            block_text = ""
-            block_rect = fitz.Rect(0, 0, 0, 0)  # Start with empty rect
-            found_figure = False
-
-            block_type = block.get("type", "?")
-            bbox = block.get("bbox", "?")
-            num_lines = len(block.get("lines", []))
-
-            block_summary = f"[Block {i}] Type: {block_type} | BBox: {bbox} | Lines: {num_lines}"
-
-            # Preview first few words if it's text
-            """if block_type == 0 and num_lines > 0:
-                preview_text = ""
-                for line in block["lines"]:
-                    for span in line.get("spans", []):
-                        preview_text += span.get("text", "") + " "
-                preview_text = preview_text.strip().replace('\n', ' ')
-                if len(preview_text) > 60:
-                    preview_text = preview_text[:60] + "..."
-                block_summary += f" | Text Preview: \"{preview_text}\"
-                """
-
-            print(block_summary)
-
-            for line in block.get("lines", []):
-                print(" - - - -Line BBox: ", line["bbox"], " - - wmode: ", line['wmode'], " - - Dir: ", line['dir'])
-
-
-                line_text = ""
-                for span in line.get("spans", []):
-                    span_text = span.get("text", "")
-                    print(" - - - - - - -  -   -  - span text: ", span_text, "~~~~~~~~~")
-                    """  --- flags = span.get("flags", 0)
-                    flags & 1 → Italic
-                    flags & 2 → Bold
-                    flags & 4 → Serif font
-                    flags & 8 → Monospace font
-                    """
-                    font = span.get("font", "")
-                    if "Bold" in font or "bold" in font:
-                        is_bold = True
-                    else:
-                        is_bold = False
-                    if  re.search(r'Fig\.\W*', span_text) and is_bold:
-                        #print("BOLD Match found!!!   span_text:", repr(span_text), " ~~~  flag_bold: ", is_bold)
-                        found_figure = True
-                    line_text += span_text + ""
-                    span_rect = fitz.Rect(span["bbox"])
-                    if block_rect.is_empty:
-                        block_rect = span_rect
-                    else:
-                        block_rect |= span_rect  # Union with existing block rect
-
-                print(" - - - - - - - line_text: ", line_text)
-
-                block_text += line_text + " "
-            print(" [-] block_text: ", block_text)
-            print('\n')
-
-            if found_figure:
-                caption_text = block_text.strip()
-                #print("**** Found figure in page ", page_num, " - ", caption_text)
-                caption_rect = block_rect
-                # print("caption height: ", caption_rect.y1 - caption_rect.y0)
-                # Simple fixed region above caption
-                is_above = is_central_caption(caption_rect, page_rect)
-                if is_above:
-                    # print("Find Figure in the central, Skip................")
-                    above_boundary_rect = search_boundary_above(caption_rect, page, 4.5, 19, prev_caption)
-                    figure_rect = fitz.Rect(
-                        page_rect.x0 + 30,
-                        above_boundary_rect.y0,
-                        page_rect.x1 - 40,
-                        min(caption_rect.y1 + 5, page_rect.y1)
-                    )
-                else:
-                    figure_rect = expand_caption_boundary(caption_rect, page, 4.5, 19, prev_caption)
-
-                # Save the image
-                pix = page.get_pixmap(clip=figure_rect, dpi=200)
-                safe_caption = "".join(c if c.isalnum() or c == '_' else '_' for c in caption_text)[:50]
-                image_filename = f"page{page_num + 1}_{safe_caption}.png"
-                image_path = os.path.join(output_folder, image_filename)
-                pix.save(image_path)
-
-                print(f"[✓] Saved : {caption_text} (Page {page_num + 1})")
-
-                page_data.append({
-                    "page": page_num + 1,
-                    "caption": caption_text,
-                    "image_path": image_path,
-                    "figure description": ""
-                })
-
-                prev_caption = figure_rect  # update for next iteration
-
-    return page_data
-
-def detach_lablize(doc, output_folder):
-    new_doc = fitz.open()
-
-    for page_num in range(35, 37):  # Max 21 pages
+    none_text = []
+    prev_caption = None
+    for page_num in range(31, 87):  # Max 21 pages
+        none_text.clear()
         page = doc[page_num]
         found_figure = False
         found_equation = False
-        # Create a blank page in new_doc with same size
-        new_page = new_doc.new_page(width=page.rect.width, height=page.rect.height)
-
         blocks = page.get_text("dict")["blocks"]
         equation_rects = []
         eq_index = ""
@@ -577,54 +455,96 @@ def detach_lablize(doc, output_folder):
                 for q, span in enumerate(line.get("spans", [])):
                     span_text = span.get("text", "")
                     print(" - - - - - - -  -   -  - span text: ", span_text, "~~~~~~~~~")
-                    # Detect FIGURE
-                    if re.search(r'Fig\.\W*', span_text) and "bold" in span.get("font", "").lower():
-                        found_figure = True
+
                     #DETECH EQUATION
                     if re.fullmatch(r'\(\d+\.\d+\)', span_text.strip()):
                         found_equation = True
-                        eq_index = span_text.strip
+                        eq_index = span_text.strip()
+                        #print("------ ----- --- Find EQ", eq_index)
 
                     if found_equation:
                         """merge spans for a same equation, the spans in the same equation is overlapped vertically. 
                         get the bbox of the merged spans using a subfunction called merge_bbox, to save the equation
                         save the equation area as an image"""
                         # Collect overlapping spans for the equation
-                        equation_rects.append(span['bbox'])
+                        #equation_rects.append(span['bbox'])
                         qq = q
                         while qq >= 1 and blocks_overlap_vertically(span['bbox'], line["spans"][qq-1]['bbox']):
                             equation_rects.append(line["spans"][qq - 1]["bbox"])
+                            print("--------- merging span: ", qq - 1)
                             qq-=1
-                    if found_figure:
+                        jj = j
+                        # equation_rects.append(line["bbox"])
+                        while jj >= 1 and blocks_overlap_vertically(span['bbox'], block["lines"][jj - 1]['bbox']):
+                            equation_rects.append(block["lines"][jj - 1]['bbox'])
+                            print("--------- merging line: ", jj - 1)
+                            jj -= 1
+                        ii = i
+                        if blocks_overlap_vertically(block['bbox'], blocks[ii - 1]['bbox']):
+                            while ii >= 1 and blocks_overlap_vertically(span['bbox'], blocks[ii - 1]['bbox']):
+                                print("--------- merging block: ", ii - 1)
+                                for l, extra_line in enumerate(blocks[ii - 1]['lines']):
+                                    if blocks_overlap_vertically(extra_line['bbox'], span['bbox']):
+                                        equation_rects.append(blocks[ii - 1]['bbox'])
+                                    else:
+                                        break
+                                ii -= 1
+                        found_equation = False  # reset for next detection
+                        print("merging done, found_equation set: ", found_equation)
+                        print("starting to save merged equation: ", equation_rects)
+                        # Merge their bounding boxes
+                        merged_rect = merge_bbox(equation_rects)
+                        merged_rect[0] -= 10
+                        merged_rect[2] += 10
+                        none_text.append(merged_rect)
+                        equation_rects.clear()
+                        # Save the merged equation area as an image
+                        image = page.get_pixmap(clip=merged_rect, dpi=300)
+                        image_filename = f"equation{eq_index}_page{page_num}_block{i}_line{j}.png"
+                        image_path = os.path.join(f"{output_folder}/equations", image_filename)
+                        image.save(image_path)
+                        print(" Saved equation=====, image save to ", f"equation_page{page_num}_block{i}_line{j}.png")
+                        # Optional: draw a red rectangle on new page to indicate equation
+                        #new_page.draw_rect(merged_rect, color=(1, 0, 0), width=0.5)
+
+                    # Detect FIGURE
+                    if re.search(r'Fig\.\W*', span_text) and "bold" in span.get("font", "").lower():
                         # Collect overlapping spans for the image
                         print("Found figure")
+                        found_figure = True
 
                     line_text += span_text + ""
                 print(" - - - - - - - line_text: ", line_text)
-                if found_equation:
-                    jj = j
-                    #equation_rects.append(line["bbox"])
-                    while jj>=1 and blocks_overlap_vertically(line['bbox'], block["lines"][jj - 1]['bbox']):
-                        equation_rects.append(block["lines"][jj - 1]['bbox'])
-                        jj -= 1
+                if found_figure:
+                    caption_rect = line['bbox']
+                    page_rect = page.rect
+                    # print("caption height: ", caption_rect.y1 - caption_rect.y0)
+                    # Simple fixed region above caption
+                    is_above = is_central_caption(caption_rect, page_rect)
+                    if is_above:
+                        # print("Find Figure in the central, Skip................")
+                        above_boundary_rect = search_boundary_above(caption_rect, page, 4.5, 19, prev_caption)
+                        figure_rect = fitz.Rect(
+                            page_rect.x0 + 30,
+                            above_boundary_rect.y0,
+                            page_rect.x1 - 40,
+                            min(caption_rect[1] + 5, page_rect.y1)
+                        )
+                    else:
+                        figure_rect = expand_caption_boundary(caption_rect, page, 4.5, 19, prev_caption)
+                    prev_caption = caption_rect
+                    # Save the image
+                    pix = page.get_pixmap(clip=figure_rect, dpi=200)
+                    safe_caption = "".join(c if c.isalnum() or c == '_' else '_' for c in line_text)[:50]
+                    image_filename = f"page{page_num + 1}_{safe_caption}.png"
+                    image_path = os.path.join(f"{output_folder}/figures", image_filename)
+                    pix.save(image_path)
+                    print(f"[✓] Saved : {line_text} (Page {page_num + 1})")
+                    found_figure = False
+
                 block_text += line_text + " "
             print(" [-] block_text: ", block_text)
             print('\n')
-        if found_equation:
-            ii = i
-            if blocks_overlap_vertically(block['bbox'], blocks[ii-1]['bbox']):
-                while ii >= 1 and blocks_overlap_vertically(block['bbox'], blocks[ii-1]['bbox']):
-                    equation_rects.append(blocks[ii-1]['bbox'])
-                    ii -= 1
-            found_equation = False  # reset for next detection
-            # Merge their bounding boxes
-            merged_rect = merge_bbox(equation_rects)
-            # Save the merged equation area as an image
-            image = page.get_pixmap(clip=merged_rect, dpi=300)
-            image.save(f"equation_page{page_num}_block{i}_line{j}.png")
-            print(" Saved equation=====, image save to ", f"equation_page{page_num}_block{i}_line{j}.png")
-            # Optional: draw a red rectangle on new page to indicate equation
-            new_page.draw_rect(merged_rect, color=(1, 0, 0), width=0.5)
             # save the merged
             """new_page.insert_text(
             span["origin"],
@@ -634,7 +554,8 @@ def detach_lablize(doc, output_folder):
             color=span.get("color", 0)
         )"""
 
-    return new_doc
+        #another for loop for extracting text information
+    return ""
 
 def main():
     for filename in os.listdir(INPUT_DIR):
