@@ -318,6 +318,52 @@ def blocks_overlap_vertically(block1, block2):
     # Two vertical ranges [y0_1, y1_1] and [y0_2, y1_2] overlap if:
     return not (y1_1 < y0_2 or y1_2 < y0_1)
 
+def blocks_overlap_vertically_or_horizontally(block1, block2):
+    """
+    Check if two blocks overlap vertically or horizontally.
+
+    Each block's bbox is a list/tuple: [x0, y0, x1, y1]
+    where:
+    - x0 is left, x1 is right
+    - y0 is top, y1 is bottom
+    (PDF coordinate system: y increases downward)
+
+    Returns True if there is any vertical or horizontal overlap, False otherwise.
+    """
+    x0_1, y0_1, x1_1, y1_1 = block1
+    x0_2, y0_2, x1_2, y1_2 = block2
+
+    vertical_overlap = not (y1_1 < y0_2 or y1_2 < y0_1)
+    horizontal_overlap = not (x1_1 < x0_2 or x1_2 < x0_1)
+
+    return vertical_overlap or horizontal_overlap
+
+
+def is_vertically_related(block1, block2):
+    y0_1, y1_1 = block1[1], block1[3]
+    y0_2, y1_2 = block2[1], block2[3]
+
+    height_1 = y1_1 - y0_1
+    height_2 = y1_2 - y0_2
+
+    # Check direct vertical overlap
+    vertically_overlap = not (y1_1 < y0_2 or y1_2 < y0_1)
+
+    # Check for small block and large block vertically close to the other
+    #small_height_threshold = 7
+    #large_height_threshold = 13.5
+    close_proximity_threshold = 2
+
+    #is_one_small = height_1 < small_height_threshold or height_2 < small_height_threshold
+    #is_one_large = height_1 > large_height_threshold or height_2 > large_height_threshold
+
+    #is_one_small =  height_2 < small_height_threshold
+    #is_one_large =  height_2 > large_height_threshold
+    vertically_close = abs(y0_2 - y1_1) < close_proximity_threshold or abs(y0_1 - y1_2) < close_proximity_threshold
+
+    return vertically_overlap or vertically_close
+
+
 def merge_block_rects(blocks):
     """
     Given a list of blocks (each with a 'bbox': [x0, y0, x1, y1]),
@@ -339,6 +385,9 @@ def merge_block_rects(blocks):
     return [x0_min, y0_min, x1_max, y1_max]
 
 def merge_bbox(bboxes):
+    if not bboxes:
+        print("bboxs list is empty, return None to emrged_rect")
+        return None
     # Combine multiple bbox rectangles into one
     x0 = min(b[0] for b in bboxes)
     y0 = min(b[1] for b in bboxes)
@@ -432,7 +481,7 @@ def extract_figures_text_with_captions(pdf_path, output_folder="out"):
     doc = fitz.open(pdf_path)
     none_text = []
     prev_caption = None
-    for page_num in range(31, 87):  # Max 21 pages
+    for page_num in range(31, 274):  # Max 21 pages
         none_text.clear()
         page = doc[page_num]
         found_figure = False
@@ -450,62 +499,81 @@ def extract_figures_text_with_captions(pdf_path, output_folder="out"):
             print(block_summary)
 
             for j, line in enumerate(block.get("lines", [])):
-                print(" - - - -Line BBox: ", line["bbox"], " - - wmode: ", line['wmode'], " - - Dir: ", line['dir'])
+                print(" - - - -Line BBox: ", line["bbox"])
+                print("-- line width: ", line['bbox'][3] - line['bbox'][1]," - - wmode: ", line['wmode'], " - - Dir: ", line['dir'])
                 line_text = ""
                 for q, span in enumerate(line.get("spans", [])):
                     span_text = span.get("text", "")
                     print(" - - - - - - -  -   -  - span text: ", span_text, "~~~~~~~~~")
 
-                    #DETECH EQUATION
-                    if re.fullmatch(r'\(\d+\.\d+\)', span_text.strip()):
-                        found_equation = True
+                    # DETECT EQUATION AND PROCESS IT
+                    if re.fullmatch(r'\((?:[1-9][0-9]?|99)\.(?:[1-9][0-9]?|99)\)', span_text.strip()):
                         eq_index = span_text.strip()
-                        #print("------ ----- --- Find EQ", eq_index)
-
-                    if found_equation:
-                        """merge spans for a same equation, the spans in the same equation is overlapped vertically. 
-                        get the bbox of the merged spans using a subfunction called merge_bbox, to save the equation
-                        save the equation area as an image"""
-                        # Collect overlapping spans for the equation
-                        #equation_rects.append(span['bbox'])
+                        print("------ ----- --- Find EQ", eq_index)
+                        equation_rects.clear()
+                        # Merge vertically overlapping spans in the same line
                         qq = q
-                        while qq >= 1 and blocks_overlap_vertically(span['bbox'], line["spans"][qq-1]['bbox']):
+                        while qq >= 1 and is_vertically_related(span['bbox'], line["spans"][qq - 1]['bbox']):
                             equation_rects.append(line["spans"][qq - 1]["bbox"])
                             print("--------- merging span: ", qq - 1)
-                            qq-=1
+                            qq -= 1
+
+                        if equation_rects:
+                            equation_rects.append(span['bbox'])  # include current span
+                            print("merging spans done....")
+                            merged_rect = merge_bbox(equation_rects)
+                        else:
+                            print("The EQ is a standalone span, force merging at least 1 block previously")
+                            merged_rect = block["lines"][j - 1]['bbox']
+
+                        # Merge vertically overlapping lines in the block
                         jj = j
-                        # equation_rects.append(line["bbox"])
-                        while jj >= 1 and blocks_overlap_vertically(span['bbox'], block["lines"][jj - 1]['bbox']):
+                        while jj >= 1 and is_vertically_related(merged_rect, block["lines"][jj - 1]['bbox']):
                             equation_rects.append(block["lines"][jj - 1]['bbox'])
                             print("--------- merging line: ", jj - 1)
                             jj -= 1
+
+                        if equation_rects:
+                            merged_rect = merge_bbox(equation_rects)
+                        else:
+                            print("The EQ is a standalone block, force merging at least 1 block previously")
+                            merged_rect = blocks[i - 1]['bbox']
+
+                        # Merge vertically overlapping blocks
                         ii = i
-                        if blocks_overlap_vertically(block['bbox'], blocks[ii - 1]['bbox']):
-                            while ii >= 1 and blocks_overlap_vertically(span['bbox'], blocks[ii - 1]['bbox']):
+                        if ii >= 1 and is_vertically_related(merged_rect, blocks[ii - 1]['bbox']):
+                            while ii >= 1 and is_vertically_related(merged_rect, blocks[ii - 1]['bbox']):
                                 print("--------- merging block: ", ii - 1)
                                 for l, extra_line in enumerate(blocks[ii - 1]['lines']):
-                                    if blocks_overlap_vertically(extra_line['bbox'], span['bbox']):
-                                        equation_rects.append(blocks[ii - 1]['bbox'])
+                                    if is_vertically_related(merged_rect, extra_line['bbox']):
+                                        equation_rects.append(extra_line['bbox'])
                                     else:
                                         break
+                                merged_rect = merge_bbox(equation_rects)
                                 ii -= 1
-                        found_equation = False  # reset for next detection
-                        print("merging done, found_equation set: ", found_equation)
-                        print("starting to save merged equation: ", equation_rects)
-                        # Merge their bounding boxes
+
+                        print("merging done, starting to save merged equation:", equation_rects)
+
+                        # Final merging of all rectangles
                         merged_rect = merge_bbox(equation_rects)
-                        merged_rect[0] -= 10
-                        merged_rect[2] += 10
-                        none_text.append(merged_rect)
-                        equation_rects.clear()
-                        # Save the merged equation area as an image
-                        image = page.get_pixmap(clip=merged_rect, dpi=300)
-                        image_filename = f"equation{eq_index}_page{page_num}_block{i}_line{j}.png"
-                        image_path = os.path.join(f"{output_folder}/equations", image_filename)
-                        image.save(image_path)
-                        print(" Saved equation=====, image save to ", f"equation_page{page_num}_block{i}_line{j}.png")
-                        # Optional: draw a red rectangle on new page to indicate equation
-                        #new_page.draw_rect(merged_rect, color=(1, 0, 0), width=0.5)
+
+                        if merged_rect is not None:
+                            equation_rects.clear()
+                            none_text.append(merged_rect)
+
+                            # Slightly expand bounding box
+                            merged_rect[0] -= 10
+                            merged_rect[1] -= 2
+                            merged_rect[2] += 10
+
+                            image = page.get_pixmap(clip=merged_rect, dpi=300)
+                            image_filename = f"equation{eq_index}_page{page_num}_block{i}_line{j}.png"
+                            image_path = os.path.join(f"{output_folder}/equations", image_filename)
+                            image.save(image_path)
+
+                            print("✅ Saved equation image to", image_path)
+                        else:
+                            print("⚠️ Warning: merged_rect is None. Skipping adjustment.")
 
                     # Detect FIGURE
                     if re.search(r'Fig\.\W*', span_text) and "bold" in span.get("font", "").lower():
