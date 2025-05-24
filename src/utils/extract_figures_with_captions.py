@@ -3,6 +3,12 @@ import os
 import re
 from pathlib import Path
 import json
+import pytesseract
+from PIL import Image
+import cv2
+from pytesseract import Output
+import numpy as np
+
 
 
 
@@ -481,14 +487,12 @@ def extract_figures_text_with_captions(pdf_path, output_folder="out"):
     doc = fitz.open(pdf_path)
     none_text = []
     prev_caption = None
-    for page_num in range(31, 274):  # Max 21 pages
+    for page_num in range(31, 40):  # Max 21 pages
         none_text.clear()
         page = doc[page_num]
         found_figure = False
-        found_equation = False
         blocks = page.get_text("dict")["blocks"]
         equation_rects = []
-        eq_index = ""
         for i, block in enumerate(blocks):
             block_text = ""
             #print block information for debugging
@@ -571,6 +575,11 @@ def extract_figures_text_with_captions(pdf_path, output_folder="out"):
                             image_path = os.path.join(f"{output_folder}/equations", image_filename)
                             image.save(image_path)
 
+                            img = Image.frombytes("RGB", [image.width, image.height], image.samples)
+                            text = pytesseract.image_to_string(img)
+                            print("----- equation text: ", text)
+
+
                             print("✅ Saved equation image to", image_path)
                         else:
                             print("⚠️ Warning: merged_rect is None. Skipping adjustment.")
@@ -607,6 +616,9 @@ def extract_figures_text_with_captions(pdf_path, output_folder="out"):
                     image_filename = f"page{page_num + 1}_{safe_caption}.png"
                     image_path = os.path.join(f"{output_folder}/figures", image_filename)
                     pix.save(image_path)
+
+
+
                     print(f"[✓] Saved : {line_text} (Page {page_num + 1})")
                     found_figure = False
 
@@ -625,6 +637,72 @@ def extract_figures_text_with_captions(pdf_path, output_folder="out"):
         #another for loop for extracting text information
     return ""
 
+def extract_content_bocr(pdf_path, output_folder="out"):
+    os.makedirs(f"{output_folder}/equations", exist_ok=True)
+    os.makedirs(f"{output_folder}/figures", exist_ok=True)
+    doc = fitz.open(pdf_path)
+    none_text = []
+    for page_num in range(20, 23):  # Max 21 pages
+        none_text.clear()
+        """pix = page.get_pixmap(clip=page.rect, dpi=200)
+        img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+        text = pytesseract.image_to_string(img)
+        print("----- equation text: ", text)"""
+        page = doc[page_num]
+        pix = page.get_pixmap(dpi=300)
+        image = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, pix.n)
+        if image.shape[2] == 4:  # remove alpha channel if present
+            image = cv2.cvtColor(image, cv2.COLOR_BGRA2BGR)
+
+        # OCR with bounding boxes
+        data = pytesseract.image_to_data(image, output_type=Output.DICT)
+
+        # Create a blank mask for low-density regions
+        mask = np.ones(image.shape[:2], dtype=np.uint8) * 255
+
+        n_boxes = len(data['text'])
+        boxes = []
+        for i in range(n_boxes):
+            if int(data['conf'][i]) > 30:
+                (x, y, w, h) = (data['left'][i], data['top'][i], data['width'][i], data['height'][i])
+                boxes.append((x, y, w, h))
+                # Draw text bounding box for reference
+                cv2.rectangle(mask, (x, y), (x + w, y + h), 0, -1)  # draw text as black
+
+        # Invert mask to find blank regions
+        mask_inv = 255 - mask
+
+        # Find contours of blank regions (possible figures/equations)
+        contours, _ = cv2.findContours(mask_inv, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        print("Length of contours: ", len(contours))
+        figure_index = 1
+        for cnt in contours:
+            x, y, w, h = cv2.boundingRect(cnt)
+            if w * h > 20000:  # adjust threshold based on your layout
+                roi = image[y:y + h, x:x + w]
+
+                # Try to extract caption/equation number from OCR in nearby area
+                caption_text = ""
+                for i in range(n_boxes):
+                    tx, ty, tw, th = data['left'][i], data['top'][i], data['width'][i], data['height'][i]
+                    if abs(ty - (y + h)) < 50 and tx > x - 50 and tx < x + w + 50:
+                        caption_text += data['text'][i] + " "
+
+                print(f"Page {page_num + 1} - Found region with caption/equation: {caption_text.strip()}")
+
+                # Save the region and white it out on original image
+                cv2.imwrite(os.path.join(output_folder, f"page{page_num + 1}_region{figure_index}.png"), roi)
+                # Ensure the image is writable
+                image = image.copy()
+                cv2.rectangle(image, (x, y), (x + w, y + h), (255, 255, 255), -1)  # white out
+                figure_index += 1
+
+        # Save the cleaned image
+        cv2.imwrite(os.path.join(output_folder, f"page{page_num + 1}_cleaned.png"), image)
+
+    print("Finished processing.")
+    return ""
+
 def main():
     for filename in os.listdir(INPUT_DIR):
         if not filename.lower().endswith(".pdf"):
@@ -632,7 +710,8 @@ def main():
         pdf_path = os.path.join(INPUT_DIR, filename)
 
         #result = extract_figures_captions_bybbx(pdf_path)
-        result = extract_figures_text_with_captions(pdf_path)
+        #result = extract_figures_text_with_captions(pdf_path)
+        result = extract_content_bocr(pdf_path)
         out_file = os.path.join(OUTPUT_DIR, f"{Path(filename).stem}.json")
         with open(out_file, "w", encoding="utf-8") as f:
             json.dump(result, f, indent=2, ensure_ascii=False)
