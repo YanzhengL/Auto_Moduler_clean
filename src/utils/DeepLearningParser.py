@@ -56,7 +56,7 @@ def classify_by_regex(pil_image, block, original_label, block_label):
         print("✔ Equation detected:", text)
         return "Equation"
     else:
-        print("✘ Not a caption, keeping label:", original_label, "| Text:", text)
+        print("✘ Not a special block, keeping label:", original_label, "| Text:", text)
         return original_label
 
 def white_out_regions(image, layout, keep_labels=["Text", "Title", "List"]):
@@ -172,7 +172,7 @@ def detect_extract(pdf_path, output_dir):
     model = lp.Detectron2LayoutModel(
         config_path=str(base_model_dir / "config.yml"),
         model_path=str(base_model_dir / "model.pth"),
-        extra_config=["MODEL.ROI_HEADS.SCORE_THRESH_TEST", 0.5],
+        extra_config=["MODEL.ROI_HEADS.SCORE_THRESH_TEST", 0.3],
         label_map={0: "Text", 1: "Title", 2: "List", 3: "Table", 4: "Figure"},
     )
 
@@ -182,9 +182,6 @@ def detect_extract(pdf_path, output_dir):
         page = doc[page_num]
         pix = page.get_pixmap(dpi=600)
         img_array = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, pix.n)
-        if img_array.shape[2] == 4:  # Convert RGBA to RGB if needed
-            img_array = cv2.cvtColor(img_array, cv2.COLOR_BGRA2BGR)
-
         layout = model.detect(img_array)
         print("Page: ", page_num, "  Blocks: ", len(layout))
         #layout = merge_nearby_blocks(layout)
