@@ -1,0 +1,46 @@
+[
+  {
+    "page": 21,
+    "label": "Text",
+    "coordinates": [
+      234,
+      1712,
+      1725,
+      2239
+    ],
+    "text": "In recent years, the field of power electronics has experienced a large growth due to\nconfluence of several factors. The controller in the block diagram of Fig. 1-1 consists of\nlinear integrated circuits and/or digital signal processors. Revolutionary advances in mi-\ncroelectronics methods have led to the development of such controllers. Moreover, these\nadvances in semiconductor fabrication technology have made it possible to significantly\nimprove the voltage- and current-handling capabilities and the switching speeds of power\nsemiconductor devices, which make up the power processor unit of Fig. 1-1. At the same\ntime, the market for power electronics has significantly expanded. Electric utilities in the\nUnited States expect that by the year 2000 over 50% of the electrical load may be supplied\nihrough power electronic systems such as in Fig. 1-1. This growth in market may even be"
+  },
+  {
+    "page": 21,
+    "label": "Title",
+    "coordinates": [
+      209,
+      290,
+      1698,
+      600
+    ],
+    "text": "POWER ELECTRONIC\n\nSYSTEMS"
+  },
+  {
+    "page": 22,
+    "label": "Title",
+    "coordinates": [
+      197,
+      177,
+      1719,
+      307
+    ],
+    "text": "higher in other parts of the world where the cost of energy is significantly higher than that\n\nin the United States. Various applications of power electronics are considered in Sec-\ntian 1.23"
+  },
+  {
+    "page": 22,
+    "label": "Title",
+    "coordinates": [
+      192,
+      418,
+      1608,
+      478
+    ],
+    "text": "POWER ELECTRONICS VERSUS LINEAR ELECTRONICS"
+  }
+]

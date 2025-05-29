@@ -9,9 +9,6 @@ import cv2
 from pytesseract import Output
 import numpy as np
 
-
-
-
 def search_boundary_above(caption_rect, page, step=10, window=21, previous_caption_rect=None):
     """
     Search upward from caption_rect. Stop when:
@@ -344,7 +341,6 @@ def blocks_overlap_vertically_or_horizontally(block1, block2):
 
     return vertical_overlap or horizontal_overlap
 
-
 def is_vertically_related(block1, block2):
     y0_1, y1_1 = block1[1], block1[3]
     y0_2, y1_2 = block2[1], block2[3]
@@ -368,7 +364,6 @@ def is_vertically_related(block1, block2):
     vertically_close = abs(y0_2 - y1_1) < close_proximity_threshold or abs(y0_1 - y1_2) < close_proximity_threshold
 
     return vertically_overlap or vertically_close
-
 
 def merge_block_rects(blocks):
     """

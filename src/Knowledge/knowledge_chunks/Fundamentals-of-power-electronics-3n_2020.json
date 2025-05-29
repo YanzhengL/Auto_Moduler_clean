@@ -1,1 +1,20 @@
-""
+[
+  {
+    "page": 99,
+    "caption": "Fig. 4.29 The diode under forward-bias conditions",
+    "image_path": "bold_figures_smart\\page99_Fig__4_29_The_diode_under_forward_bias_conditions.png",
+    "figure description": ""
+  },
+  {
+    "page": 99,
+    "caption": "Fig. 4.30 Minority-carrier concentrations and recombination under forward-bias conditions",
+    "image_path": "bold_figures_smart\\page99_Fig__4_30_Minority_carrier_concentrations_and_reco.png",
+    "figure description": ""
+  },
+  {
+    "page": 101,
+    "caption": "Fig. 4.31 The diode reverse-recovery process: ( a ) waveforms of diode voltage v and diode current i ; ( b ) minority charge concentration on one side of the p–n junction",
+    "image_path": "bold_figures_smart\\page101_Fig__4_31_The_diode_reverse_recovery_process____a_.png",
+    "figure description": ""
+  }
+]
