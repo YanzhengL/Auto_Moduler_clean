@@ -11,14 +11,17 @@ def real_work(user_request):
         status.update(label="Real work running...", state="running")
 
         time.sleep(3)  # Simulate work (e.g., generating a PLECS model)
-        image_path = os.path.join("src", "resources", "boost.png")
+        BASE_DIR = os.path.dirname(os.path.dirname(__file__))  # one level up from /app
+        image_path = os.path.join(BASE_DIR, "resources", "boost.png")
+        #image_path = os.path.join("src", "resources", "boost.png")
+        print("Loading image from:", image_path)
         st.image(image_path, caption="Boost Converter Design", use_container_width=True)
 
         status.update(label=f"P✅ Model successfully generated!", state="complete")
         time.sleep(1)
         status.update(label=f"Simulation running", state="running")
         time.sleep(3)
-        image_path = os.path.join("src", "resources", "plot.png")
+        image_path = os.path.join(BASE_DIR, "resources", "plot.png")
         st.image(image_path, caption="Simulation results", use_container_width=True)
         status.update(label=f"P✅ Model simulation process done!", state="complete")
         # Store result in session state
@@ -46,8 +49,8 @@ if "processing_complete" not in st.session_state:
     st.session_state.processing_complete = True  # Default to True to avoid showing "working" on first load
 
 # Streamlit UI
-st.title("🚀 PEMC AutoModeler")
-st.info("A Circuit Model Generator Powered by PEMC Research Team")
+st.title("🚀 AutoModeler - AI+Engineering")
+st.info("A Circuit Model Generator Powered by Aviation Electrification Research Team of University of Nottingham")
 
 # Collect user request input
 st.markdown("---")  # Separator for clarity
