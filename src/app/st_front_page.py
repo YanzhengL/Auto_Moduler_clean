@@ -49,7 +49,7 @@ if "processing_complete" not in st.session_state:
     st.session_state.processing_complete = True  # Default to True to avoid showing "working" on first load
 
 # Streamlit UI
-st.title("🚀 AutoModeler - AI+Engineering")
+st.title("🚀 AutoModular - AI+Engineering")
 st.info("A Circuit Model Generator Powered by Aviation Electrification Research Team of University of Nottingham")
 
 # Collect user request input
