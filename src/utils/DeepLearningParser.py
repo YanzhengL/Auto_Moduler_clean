@@ -164,6 +164,44 @@ def merge_nearby_blocks(layout, threshold=21):
 
     return lp.Layout(merged)
 
+
+def merge_contained_blocks(blocks):
+    """
+    Remove blocks that are fully contained inside another block.
+    Keep only the larger block.
+
+    Args:
+        blocks: List of blocks, each represented as a tuple or dict
+                with coordinates (x_min, y_min, x_max, y_max).
+
+    Returns:
+        A filtered list with only the largest blocks, no contained blocks.
+    """
+    filtered_blocks = []
+
+    for i, block_i in enumerate(blocks):
+        contained = False
+
+        for j, block_j in enumerate(blocks):
+            if i == j:
+                continue
+
+            if is_contained(block_i, block_j):
+                # block_i is fully inside block_j
+                contained = True
+                break
+
+        if not contained:
+            filtered_blocks.append(block_i)
+
+    return filtered_blocks
+
+def is_contained(inner, outer, tol=15):
+    return (inner.block.x_1 >= outer.block.x_1 - tol and
+            inner.block.y_1 >= outer.block.y_1 - tol and
+            inner.block.x_2 <= outer.block.x_2 + tol and
+            inner.block.y_2 <= outer.block.y_2 + tol)
+
 def detect_extract(pdf_path, output_dir):
     doc = fitz.open(pdf_path)
     os.makedirs(output_dir, exist_ok=True)
@@ -171,8 +209,8 @@ def detect_extract(pdf_path, output_dir):
     base_model_dir = Path.home() / "Projects" / "Auto_Moduler_clean"/ "src"/ "models"
     model = lp.Detectron2LayoutModel(
         config_path=str(base_model_dir / "config.yml"),
-        model_path=str(base_model_dir / "model.pth"),
-        extra_config=["MODEL.ROI_HEADS.SCORE_THRESH_TEST", 0.3],
+        model_path=str(base_model_dir / "PubLayNet-faster_rcnn_R_50_FPN_3x-model.pth"),
+        extra_config=["MODEL.ROI_HEADS.SCORE_THRESH_TEST", 0.2],
         label_map={0: "Text", 1: "Title", 2: "List", 3: "Table", 4: "Figure"},
     )
 
@@ -183,6 +221,7 @@ def detect_extract(pdf_path, output_dir):
         pix = page.get_pixmap(dpi=600)
         img_array = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, pix.n)
         layout = model.detect(img_array)
+        layout = merge_contained_blocks(layout)
         print("Page: ", page_num, "  Blocks: ", len(layout))
         #layout = merge_nearby_blocks(layout)
         # Convert to PIL for further processing
