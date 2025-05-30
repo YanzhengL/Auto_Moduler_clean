@@ -50,7 +50,7 @@ if "processing_complete" not in st.session_state:
 
 # Streamlit UI
 st.title("🚀 AutoModular - AI+Engineering")
-st.info("A Circuit Model Generator Powered by Aviation Electrification Research Team of University of Nottingham")
+st.info("Circuit Model Generator developed by the Aviation Electrification Research Team at the University of Nottingham.")
 
 # Collect user request input
 st.markdown("---")  # Separator for clarity
